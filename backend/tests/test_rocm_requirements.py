@@ -40,7 +40,7 @@ def _has_amd_hardware():
         return False
 
 
-@pytest.fixture()
+@pytest.fixture
 def backend_dir():
     return Path(__file__).parent.parent
 
@@ -65,8 +65,8 @@ class TestRocmRequirements:
 
     @pytest.mark.timeout(900)
     @pytest.mark.skipif(
-        not os.environ.get("VOICEBOX_TEST_ROCM_INSTALL"),
-        reason="Set VOICEBOX_TEST_ROCM_INSTALL=1 to run the heavy install test",
+        sys.platform != "win32" or not os.environ.get("VOICEBOX_TEST_ROCM_INSTALL"),
+        reason="Requires Windows and VOICEBOX_TEST_ROCM_INSTALL=1",
     )
     def test_rocm_torch_installs_and_detects_amd(self, backend_dir):
         """

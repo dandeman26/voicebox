@@ -4,6 +4,7 @@ Platform detection for backend selection.
 
 import platform
 import subprocess
+import sys
 from functools import lru_cache
 from typing import Literal
 
@@ -38,9 +39,11 @@ def is_amd_gpu_windows() -> bool:
 
     # Primary method: WMI query for AMD adapters
     try:
+        creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
         result = subprocess.run(
             [
                 "powershell",
+                "-NoProfile",
                 "-Command",
                 "Get-CimInstance Win32_VideoController | "
                 "Where-Object {$_.AdapterCompatibility -like '*AMD*'} | "
@@ -49,6 +52,8 @@ def is_amd_gpu_windows() -> bool:
             capture_output=True,
             text=True,
             check=True,
+            timeout=10,
+            creationflags=creationflags,
         )
         if int(result.stdout.strip()) > 0:
             return True

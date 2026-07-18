@@ -22,13 +22,19 @@ import tarfile
 from pathlib import Path
 from typing import Optional
 
+from .. import __version__
 from ..config import get_data_dir
 from ..utils.progress import get_progress_manager
-from .. import __version__
 
 logger = logging.getLogger(__name__)
 
-GITHUB_RELEASES_URL = "https://github.com/jamiepine/voicebox/releases/download"
+# This beta publishes the Windows ROCm archives from the user's fork. Both can
+# be overridden for local mirrors or future builds without changing code.
+GITHUB_RELEASES_URL = os.environ.get(
+    "VOICEBOX_ROCM_RELEASES_URL",
+    "https://github.com/dandeman26/voicebox/releases/download",
+).rstrip("/")
+DEFAULT_ROCM_RELEASE_TAG = "v0.5.1-amd-beta.1"
 
 PROGRESS_KEY = "rocm-backend"
 
@@ -244,7 +250,7 @@ async def download_rocm_binary(version: Optional[str] = None):
     - ROCm libs: only if missing or version mismatch
 
     Args:
-        version: Version tag (e.g. "v0.3.0"). Defaults to current app version.
+        version: Release tag (e.g. "v0.3.0"). Defaults to this beta's tag.
     """
     if _download_lock.locked():
         logger.info("ROCm download already in progress, skipping duplicate request")
@@ -258,12 +264,14 @@ async def _download_rocm_binary_locked(version: Optional[str] = None):
     import httpx
 
     if version is None:
-        version = f"v{__version__}"
+        version = os.environ.get("VOICEBOX_ROCM_RELEASE_TAG", DEFAULT_ROCM_RELEASE_TAG)
 
     progress = get_progress_manager()
     rocm_dir = get_rocm_dir()
 
-    need_server = _needs_server_download(version)
+    # The beta release tag has a descriptive suffix, while the executable's
+    # internal version remains normal SemVer for Windows installer upgrades.
+    need_server = _needs_server_download()
     need_libs = _needs_rocm_libs_download()
 
     if not need_server and not need_libs:
@@ -401,6 +409,18 @@ def get_rocm_binary_version() -> Optional[str]:
     rocm_path = get_rocm_binary_path()
     if not rocm_path:
         return None
+
+    # PyInstaller --noconsole builds do not always expose stdout on Windows.
+    # Prefer the build-time manifest and retain --version for old archives.
+    version_file = rocm_path.parent / "voicebox-version.txt"
+    if version_file.exists():
+        try:
+            version = version_file.read_text(encoding="utf-8").strip()
+            if version:
+                return version
+        except OSError as e:
+            logger.warning(f"Could not read {version_file.name}: {e}")
+
     try:
         result = subprocess.run(
             [str(rocm_path), "--version"],

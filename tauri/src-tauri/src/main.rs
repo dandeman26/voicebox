@@ -238,6 +238,17 @@ fn write_persisted_backend_override(data_dir: &std::path::Path, value: Option<&s
 /// Run `<exe> --version` with a 10-second timeout to avoid hanging Tauri startup.
 /// Returns the last whitespace-delimited token from stdout (e.g. "0.4.4"), or None on any failure.
 async fn probe_binary_version(exe: &std::path::Path, cwd: &std::path::Path) -> Option<String> {
+    // GPU backends are Windows --noconsole builds, where stdout from
+    // `--version` is not reliable. New archives include this manifest; keep
+    // the process probe below for backwards compatibility.
+    let version_file = cwd.join("voicebox-version.txt");
+    if let Ok(version) = std::fs::read_to_string(&version_file) {
+        let version = version.trim();
+        if !version.is_empty() {
+            return Some(version.to_string());
+        }
+    }
+
     let mut cmd = tokio::process::Command::new(exe);
     cmd.arg("--version")
         .current_dir(cwd)

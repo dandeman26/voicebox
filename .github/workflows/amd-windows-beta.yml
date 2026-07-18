@@ -1,0 +1,209 @@
+name: Build AMD Windows Beta
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - amd-windows-beta
+
+permissions:
+  contents: write
+
+concurrency:
+  group: amd-windows-beta
+  cancel-in-progress: true
+
+env:
+  RELEASE_TAG: v0.5.1-amd-beta.1
+  RELEASE_TITLE: Voicebox 0.5.1 AMD Windows Beta 1
+
+jobs:
+  build-app:
+    name: Windows app installer
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./tauri/src-tauri -> target"
+
+      - name: Install Python build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller
+          python -m pip install -r backend/requirements.txt
+          python -m pip install --no-deps chatterbox-tts hume-tada
+
+      - name: Build CPU server and MCP sidecars
+        shell: pwsh
+        run: |
+          python backend/build_binary.py
+          if ($LASTEXITCODE -ne 0) { throw "CPU sidecar build failed" }
+          python backend/build_binary.py --shim
+          if ($LASTEXITCODE -ne 0) { throw "MCP sidecar build failed" }
+
+          $platform = (rustc --print host-tuple).Trim()
+          New-Item -ItemType Directory -Force tauri/src-tauri/binaries | Out-Null
+          Copy-Item backend/dist/voicebox-server.exe "tauri/src-tauri/binaries/voicebox-server-$platform.exe"
+          Copy-Item backend/dist/voicebox-mcp.exe "tauri/src-tauri/binaries/voicebox-mcp-$platform.exe"
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.8"
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build unsigned NSIS installer
+        working-directory: tauri
+        run: bun run tauri build --bundles nsis
+
+      - name: Name installer and write checksum
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release-assets | Out-Null
+          $source = Get-ChildItem "tauri/src-tauri/target/release/bundle/nsis/*.exe" | Select-Object -First 1
+          if (-not $source) { throw "Tauri did not produce an NSIS installer" }
+          $dest = "release-assets/Voicebox_0.5.1_AMD_Beta_1_x64-setup.exe"
+          Copy-Item $source.FullName $dest
+          $hash = (Get-FileHash $dest -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  Voicebox_0.5.1_AMD_Beta_1_x64-setup.exe" | Set-Content -Encoding ascii "$dest.sha256"
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: voicebox-amd-beta-installer
+          path: release-assets/*
+          compression-level: 0
+          retention-days: 7
+
+  build-rocm:
+    name: AMD ROCm backend
+    runs-on: windows-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Python build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller pytest pytest-asyncio pytest-timeout
+          python -m pip install -r backend/requirements.txt
+          python -m pip install --no-deps chatterbox-tts hume-tada
+
+      - name: Run AMD packaging tests
+        shell: pwsh
+        env:
+          PYTHONPATH: .
+        run: |
+          python -m pytest `
+            backend/tests/test_amd_gpu_detect.py `
+            backend/tests/test_package_rocm.py `
+            backend/tests/test_rocm_backends.py `
+            backend/tests/test_rocm_build.py `
+            backend/tests/test_rocm_download.py `
+            backend/tests/test_rocm_requirements.py -q
+
+      - name: Build ROCm server
+        working-directory: backend
+        shell: pwsh
+        run: |
+          python build_binary.py --rocm
+          if ($LASTEXITCODE -ne 0) { throw "ROCm sidecar build failed" }
+
+          $version = (Get-Content "dist/voicebox-server-rocm/voicebox-version.txt" -Raw).Trim()
+          if ($version -ne "0.5.1") { throw "Unexpected ROCm backend version: $version" }
+          if (-not (Test-Path "dist/voicebox-server-rocm/voicebox-server-rocm.exe")) {
+            throw "ROCm executable is missing"
+          }
+
+      - name: Package ROCm core and runtime archives
+        shell: pwsh
+        run: |
+          python scripts/package_rocm.py `
+            backend/dist/voicebox-server-rocm/ `
+            --output release-assets/ `
+            --rocm-libs-version rocm7.2-v1 `
+            --torch-compat ">=2.9.0,<2.10.0"
+
+      - name: Validate ROCm archives
+        shell: pwsh
+        run: |
+          python -c "import tarfile; p='release-assets/voicebox-server-rocm.tar.gz'; n=set(tarfile.open(p).getnames()); assert 'voicebox-server-rocm.exe' in n; assert 'voicebox-version.txt' in n"
+          python -c "import tarfile; p='release-assets/rocm-libs-rocm7.2-v1.tar.gz'; n=tarfile.open(p).getnames(); assert any(x.lower().endswith('amdhip64.dll') for x in n); assert any('miopen' in x.lower() for x in n)"
+
+      - name: Upload ROCm artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: voicebox-amd-beta-rocm
+          path: release-assets/*
+          compression-level: 0
+          retention-days: 7
+
+  publish:
+    name: Publish beta release
+    needs:
+      - build-app
+      - build-rocm
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: voicebox-amd-beta-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Verify release payload
+        run: |
+          set -euo pipefail
+          cp scripts/verify-windows-rocm.ps1 release-assets/
+          cp AMD_WINDOWS_BETA.md release-assets/README-AMD-BETA.md
+          ls -lh release-assets
+          test -f release-assets/Voicebox_0.5.1_AMD_Beta_1_x64-setup.exe
+          test -f release-assets/voicebox-server-rocm.tar.gz
+          test -f release-assets/rocm-libs-rocm7.2-v1.tar.gz
+          test -f release-assets/voicebox-server-rocm.tar.gz.sha256
+          test -f release-assets/rocm-libs-rocm7.2-v1.tar.gz.sha256
+
+      - name: Publish GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" release-assets/* --clobber
+          else
+            gh release create "$RELEASE_TAG" release-assets/* \
+              --target "$GITHUB_SHA" \
+              --title "$RELEASE_TITLE" \
+              --prerelease \
+              --notes-file AMD_WINDOWS_BETA.md
+          fi

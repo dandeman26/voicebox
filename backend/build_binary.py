@@ -11,10 +11,20 @@ import argparse
 import logging
 import os
 import platform
+import re
 import sys
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+
+def get_voicebox_version(backend_dir: Path) -> str:
+    """Read the backend version without importing the packaged application."""
+    init_text = (backend_dir / "__init__.py").read_text(encoding="utf-8")
+    match = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', init_text, re.MULTILINE)
+    if not match:
+        raise RuntimeError("Could not read __version__ from backend/__init__.py")
+    return match.group(1)
 
 
 def is_apple_silicon():
@@ -601,6 +611,13 @@ def build_server(cuda=False, rocm=False):
 
         # Run PyInstaller
         PyInstaller.__main__.run(args)
+
+        # GPU variants are --onedir builds. Store a plain-text version beside
+        # the executable so the Windows launcher can validate it even when a
+        # --noconsole process has no capturable stdout for `--version`.
+        if cuda or rocm:
+            version_file = backend_dir / "dist" / binary_name / "voicebox-version.txt"
+            version_file.write_text(get_voicebox_version(backend_dir) + "\n", encoding="utf-8")
     finally:
         # Restore torch if we swapped it out (even on build failure)
         if restore_torch == "cuda":
@@ -781,4 +798,3 @@ if __name__ == "__main__":
         build_shim()
     else:
         build_server(cuda=cli_args.cuda, rocm=cli_args.rocm)
-

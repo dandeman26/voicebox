@@ -1141,14 +1141,14 @@
       "rocm": {
         "title": "AMD ROCm Backend",
         "activeTitle": "ROCm Backend Active",
-        "description": "AMD GPU acceleration via a downloadable ROCm backend.",
+        "description": "Experimental AMD GPU acceleration using PyTorch and ROCm 7.2.1 on Windows.",
         "downloading": "Downloading ROCm backend…",
         "downloadingShort": "Downloading…",
         "updating": "Updating…"
       },
       "downloadRocm": {
         "title": "Download AMD ROCm backend",
-        "description": "~2-3 GB download. Requires an AMD Radeon GPU with ROCm support.",
+        "description": "~2-3 GB download. Requires Windows 11, a supported AMD Radeon GPU, and a current AMD driver.",
         "button": "Download"
       },
       "switchToRocm": {
