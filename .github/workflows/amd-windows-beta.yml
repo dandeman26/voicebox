@@ -167,7 +167,12 @@ jobs:
           checks = {
               "ROCm executable": "voicebox-server-rocm.exe" in core,
               "version manifest": "voicebox-version.txt" in core,
-              "HIP runtime": any(name.lower().endswith("amdhip64.dll") for name in combined),
+              # ROCm 7.x renamed amdhip64.dll to amdhip64_7.dll on Windows.
+              "HIP runtime": any(
+                  name.rsplit("/", 1)[-1].lower().startswith("amdhip64")
+                  and name.lower().endswith(".dll")
+                  for name in combined
+              ),
               "MIOpen runtime": any("miopen" in name.lower() for name in combined),
           }
           for label, present in checks.items():
@@ -178,6 +183,7 @@ jobs:
           '@ | python -
 
       - name: Upload ROCm artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: voicebox-amd-beta-rocm
