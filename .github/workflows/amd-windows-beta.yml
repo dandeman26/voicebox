@@ -152,8 +152,30 @@ jobs:
       - name: Validate ROCm archives
         shell: pwsh
         run: |
-          python -c "import tarfile; p='release-assets/voicebox-server-rocm.tar.gz'; n=set(tarfile.open(p).getnames()); assert 'voicebox-server-rocm.exe' in n; assert 'voicebox-version.txt' in n"
-          python -c "import tarfile; p='release-assets/rocm-libs-rocm7.2-v1.tar.gz'; n=tarfile.open(p).getnames(); assert any(x.lower().endswith('amdhip64.dll') for x in n); assert any('miopen' in x.lower() for x in n)"
+          @'
+          import tarfile
+
+          core_path = "release-assets/voicebox-server-rocm.tar.gz"
+          libs_path = "release-assets/rocm-libs-rocm7.2-v1.tar.gz"
+
+          with tarfile.open(core_path) as archive:
+              core = {name.replace("\\", "/").lstrip("./") for name in archive.getnames()}
+          with tarfile.open(libs_path) as archive:
+              libs = {name.replace("\\", "/").lstrip("./") for name in archive.getnames()}
+
+          combined = core | libs
+          checks = {
+              "ROCm executable": "voicebox-server-rocm.exe" in core,
+              "version manifest": "voicebox-version.txt" in core,
+              "HIP runtime": any(name.lower().endswith("amdhip64.dll") for name in combined),
+              "MIOpen runtime": any("miopen" in name.lower() for name in combined),
+          }
+          for label, present in checks.items():
+              print(f"{label}: {'present' if present else 'MISSING'}")
+          missing = [label for label, present in checks.items() if not present]
+          if missing:
+              raise SystemExit("Missing required ROCm payload: " + ", ".join(missing))
+          '@ | python -
 
       - name: Upload ROCm artifacts
         uses: actions/upload-artifact@v4
