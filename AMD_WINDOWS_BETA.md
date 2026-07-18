@@ -1,4 +1,4 @@
-# Voicebox 0.5.1 AMD Windows Beta 1
+# Voicebox 0.5.1 AMD Windows Beta 2
 
 This is an unsigned experimental Windows build for AMD Radeon RX 7000-series GPUs. It uses AMD's official PyTorch 2.9.1 + ROCm 7.2.1 Windows wheels instead of DirectML.
 
@@ -13,7 +13,7 @@ AMD's Windows matrix explicitly lists the RX 7900 XTX but not the RX 7900 XT. Bo
 
 ## Install and enable AMD acceleration
 
-1. Install `Voicebox_0.5.1_AMD_Beta_1_x64-setup.exe` from this release. Windows may show an unknown-publisher warning because this personal beta is not code-signed.
+1. Install `Voicebox_0.5.1_AMD_Beta_2_x64-setup.exe` from this release. Windows may show an unknown-publisher warning because this personal beta is not code-signed.
 2. Open Voicebox and go to **Settings → GPU**.
 3. Under **AMD ROCm Backend**, choose **Download**. The app downloads and verifies the ROCm server and runtime archives from this release.
 4. When the download finishes, choose **Switch to ROCm backend**. Voicebox restarts its local server.

@@ -34,7 +34,7 @@ GITHUB_RELEASES_URL = os.environ.get(
     "VOICEBOX_ROCM_RELEASES_URL",
     "https://github.com/dandeman26/voicebox/releases/download",
 ).rstrip("/")
-DEFAULT_ROCM_RELEASE_TAG = "v0.5.1-amd-beta.1"
+DEFAULT_ROCM_RELEASE_TAG = "v0.5.1-amd-beta.2"
 
 PROGRESS_KEY = "rocm-backend"
 

@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  RELEASE_TAG: v0.5.1-amd-beta.1
-  RELEASE_TITLE: Voicebox 0.5.1 AMD Windows Beta 1
+  RELEASE_TAG: v0.5.1-amd-beta.2
+  RELEASE_TITLE: Voicebox 0.5.1 AMD Windows Beta 2
 
 jobs:
   build-app:
@@ -79,10 +79,10 @@ jobs:
           New-Item -ItemType Directory -Force release-assets | Out-Null
           $source = Get-ChildItem "tauri/src-tauri/target/release/bundle/nsis/*.exe" | Select-Object -First 1
           if (-not $source) { throw "Tauri did not produce an NSIS installer" }
-          $dest = "release-assets/Voicebox_0.5.1_AMD_Beta_1_x64-setup.exe"
+          $dest = "release-assets/Voicebox_0.5.1_AMD_Beta_2_x64-setup.exe"
           Copy-Item $source.FullName $dest
           $hash = (Get-FileHash $dest -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  Voicebox_0.5.1_AMD_Beta_1_x64-setup.exe" | Set-Content -Encoding ascii "$dest.sha256"
+          "$hash  Voicebox_0.5.1_AMD_Beta_2_x64-setup.exe" | Set-Content -Encoding ascii "$dest.sha256"
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
@@ -215,7 +215,7 @@ jobs:
           cp scripts/verify-windows-rocm.ps1 release-assets/
           cp AMD_WINDOWS_BETA.md release-assets/README-AMD-BETA.md
           ls -lh release-assets
-          test -f release-assets/Voicebox_0.5.1_AMD_Beta_1_x64-setup.exe
+          test -f release-assets/Voicebox_0.5.1_AMD_Beta_2_x64-setup.exe
           test -f release-assets/voicebox-server-rocm.tar.gz
           test -f release-assets/rocm-libs-rocm7.2-v1.tar.gz
           test -f release-assets/voicebox-server-rocm.tar.gz.sha256

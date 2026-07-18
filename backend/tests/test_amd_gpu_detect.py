@@ -38,6 +38,11 @@ class TestAmdGpuWindows:
         """WMI reporting an AMD adapter should return True."""
         assert is_amd_gpu_windows() is True
 
+        command = _mock_run.call_args.args[0][-1]
+        assert "Name -match 'AMD|Radeon'" in command
+        assert "Advanced Micro Devices" in command
+        assert "VEN_1002" in command
+
     @patch("backend.utils.platform_detect.platform.system", return_value="Windows")
     @patch(
         "backend.utils.platform_detect.subprocess.run",

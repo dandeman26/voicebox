@@ -46,7 +46,11 @@ def is_amd_gpu_windows() -> bool:
                 "-NoProfile",
                 "-Command",
                 "Get-CimInstance Win32_VideoController | "
-                "Where-Object {$_.AdapterCompatibility -like '*AMD*'} | "
+                "Where-Object {"
+                "$_.Name -match 'AMD|Radeon' -or "
+                "$_.AdapterCompatibility -match 'AMD|Advanced Micro Devices' -or "
+                "$_.PNPDeviceID -match 'VEN_1002'"
+                "} | "
                 "Measure-Object | Select-Object -ExpandProperty Count",
             ],
             capture_output=True,
